@@ -1,6 +1,6 @@
 // api/check-verification.js
-// Simple in-memory storage
-const verificationStorage = new Map(); // email -> verification status
+// Use global storage shared across all API endpoints
+global.verificationStorage = global.verificationStorage || new Map();
 
 export default async function handler(req, res) {
   res.setHeader('Access-Control-Allow-Origin', '*');
@@ -18,17 +18,23 @@ export default async function handler(req, res) {
   try {
     const { email } = req.body;
 
-    const verification = verificationStorage.get(email);
+    console.log('Checking verification for email:', email);
+
+    const verification = global.verificationStorage.get(email);
     
     if (verification && verification.verified) {
+      console.log('Verification found! Bundle data:', verification.bundleData.customerEmail);
+      
       // Clean up after returning the data
-      verificationStorage.delete(email);
+      global.verificationStorage.delete(email);
       
       return res.status(200).json({
         verified: true,
         bundleData: verification.bundleData
       });
     }
+
+    console.log('No verification found yet');
 
     return res.status(200).json({
       verified: false

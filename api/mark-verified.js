@@ -1,7 +1,7 @@
 // api/mark-verified.js
-// Simple in-memory storage
-const tokenStorage = new Map();
-const verificationStorage = new Map(); // email -> verification status
+// Use global storage shared across all API endpoints
+global.tokenStorage = global.tokenStorage || new Map();
+global.verificationStorage = global.verificationStorage || new Map();
 
 export default async function handler(req, res) {
   res.setHeader('Access-Control-Allow-Origin', '*');
@@ -19,25 +19,33 @@ export default async function handler(req, res) {
   try {
     const { token, email } = req.body;
 
+    console.log('Marking verified for token:', token);
+    console.log('Email:', email);
+
     // Get the bundle data from token storage
-    const bundleData = tokenStorage.get(token);
+    const bundleData = global.tokenStorage.get(token);
     
     if (!bundleData) {
+      console.log('Token not found or expired');
       return res.status(400).json({ 
         success: false, 
         error: 'Invalid or expired token' 
       });
     }
 
+    console.log('Found bundle data for:', bundleData.customerEmail);
+
     // Mark as verified for this email
-    verificationStorage.set(email, {
+    global.verificationStorage.set(email, {
       verified: true,
       bundleData: bundleData,
       timestamp: Date.now()
     });
 
     // Clean up the token (one-time use)
-    tokenStorage.delete(token);
+    global.tokenStorage.delete(token);
+
+    console.log('Marked as verified for email:', email);
 
     return res.status(200).json({
       success: true,

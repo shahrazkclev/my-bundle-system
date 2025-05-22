@@ -1,6 +1,49 @@
 // api/create-invoice.js
 const stripe = require('stripe')(process.env.STRIPE_SECRET_KEY);
 
+// Secure price mapping - product names to Stripe price IDs
+const priceMapping = {
+  "The Tornado": "price_1RMDfxFXBh2FfiM2A2TLeZI2",
+  "Sprikles": "price_1RMDf7FXBh2FfiM2ofCMBn4d",
+  "wheel": "price_1RMDPsFXBh2FfiM2ezrEdtWP",
+  "Ice Off": "price_1RMDOsFXBh2FfiM2umglwjbB",
+  "Shift Line A & B": "price_1RMDHnFXBh2FfiM2Wjp32JAV",
+  "Unfold": "price_1RMDH3FXBh2FfiM2OSyGZ6UD",
+  "Projector": "price_1RMDFzFXBh2FfiM2Y9UfauFQ",
+  "Pop up Pro": "price_1RMDFDFXBh2FfiM27vhVQqLT",
+  "MeshGen": "price_1RMDDoFXBh2FfiM2QiIH4gcd",
+  "Slideshow B": "price_1RMD9XFXBh2FfiM2gYkPOpTZ",
+  "Slideshow A": "price_1RMD8rFXBh2FfiM27hhFvwjl",
+  "The Sprayer": "price_1RMD7xFXBh2FfiM2vgiPHmdb",
+  "swirls": "price_1RMD73FXBh2FfiM2FvTIh3si",
+  "Cloth On Path": "price_1RMD3cFXBh2FfiM2Kddmsols",
+  "Gear Platform": "price_1RMD2ZFXBh2FfiM2BgdWYm6Q",
+  "Levitate": "price_1RMD1DFXBh2FfiM2uR1E2Avh",
+  "Ripples": "price_1RMD05FXBh2FfiM2ZCNNGiHq",
+  "Motion Domain": "price_1RMCuMFXBh2FfiM2afaW3bXj",
+  "Knitting effect": "price_1RMCpbFXBh2FfiM2q0d5pbb2",
+  "Cleverpoly All in One": "price_1RJX94FXBh2FfiM2aOyEnQbP",
+  "Easy Grid asset": "price_1QWQliFXBh2FfiM2LexToGlc",
+  "Roll on Path asset": "price_1QWM3pFXBh2FfiM27PT0ZhgT",
+  "Pack of 5 Hand-made motions": "price_1QWM21FXBh2FfiM21X0aVwgO",
+  "Soft balls Asset": "price_1QWM0ZFXBh2FfiM2LUfq2M1v",
+  "Bubbles on Path asset": "price_1QWLzdFXBh2FfiM2WyBPFmZC",
+  "Good Shapekeys Asset": "price_1QWLxdFXBh2FfiM2jJiY0sEe",
+  "Animated Array asset": "price_1QWLveFXBh2FfiM2hXqvkHx3",
+  "Motion Line asset": "price_1QWLrBFXBh2FfiM2XdHzF469",
+  "Cloth Printing asset": "price_1QWLoBFXBh2FfiM2Jw1gEtIV",
+  "360 Loop asset": "price_1Q8PJYFXBh2FfiM2ywcoxwVw",
+  "Auto Animate - asset": "price_1Q8PItFXBh2FfiM2L3EinmLP",
+  "Jump & Roll asset": "price_1Q8PBtFXBh2FfiM2OQ6PyJNF",
+  "Scale & Slide motion Asset": "price_1Q8P7ZFXBh2FfiM2u6ZS3cHC",
+  "Things on Path Asset": "price_1Q8P5BFXBh2FfiM2bgbmL9Ul",
+  "Water on Path Asset": "price_1Q8P40FXBh2FfiM2EdzLBP6k",
+  "The Lazy Motion Library Season 1": "price_1Q8OSqFXBh2FfiM2lQyF2cta",
+  "Textify: Callouts & Titles animation": "price_1PmGneFXBh2FfiM2n4WQUuj4",
+  "Advanced 3d Product Animation Course": "price_1PmGfEFXBh2FfiM23zNpC9pp",
+  "H2O Droplet Simulation": "price_1PfilwFXBh2FfiM2Ce9p1FqB"
+};
+
 // Simple in-memory storage for demo (in production, use a database)
 const tokenStorage = new Map();
 
@@ -60,12 +103,25 @@ export default async function handler(req, res) {
       });
     }
 
+    // Convert product names to price IDs
+    const productsWithPriceIds = finalBundleData.selectedProducts.map(product => {
+      const priceId = priceMapping[product.name];
+      if (!priceId) {
+        throw new Error(`Unknown product: ${product.name}`);
+      }
+      return {
+        ...product,
+        priceId: priceId
+      };
+    });
+
     // Server-side discount validation (prevents cheating!)
-    const subtotal = finalBundleData.selectedProducts.reduce((sum, product) => sum + product.price, 0);
+    const subtotal = productsWithPriceIds.reduce((sum, product) => sum + product.price, 0);
     const serverDiscountPercent = calculateDiscount(subtotal);
 
     console.log('Creating invoice for:', finalBundleData.customerEmail);
-    console.log('Products:', finalBundleData.selectedProducts.length);
+    console.log('Products:', productsWithPriceIds.length);
+    console.log('Product names:', productsWithPriceIds.map(p => p.name));
     console.log('Subtotal:', subtotal);
     console.log('Discount:', serverDiscountPercent + '%');
 
@@ -73,7 +129,7 @@ export default async function handler(req, res) {
     const invoice = await createStripeInvoice(
       finalBundleData.customerEmail,
       finalBundleData.customerName || 'Customer',
-      finalBundleData.selectedProducts,
+      productsWithPriceIds,
       serverDiscountPercent
     );
 
@@ -174,7 +230,7 @@ async function createStripeInvoice(customerEmail, customerName, products, discou
         price: product.priceId,
         quantity: 1
       });
-      console.log('Added product:', product.priceId);
+      console.log('Added product:', product.name, '→', product.priceId);
     }
 
     // Step 4: Apply discount if applicable

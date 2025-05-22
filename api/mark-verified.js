@@ -1,64 +1,109 @@
 // api/mark-verified.js
-// Use global storage shared across all API endpoints
+// Test version to verify email verification flow
+
+// Access global storage
 global.tokenStorage = global.tokenStorage || new Map();
 global.verificationStorage = global.verificationStorage || new Map();
 
 export default async function handler(req, res) {
-  // Enhanced CORS headers
+  // CORS headers
   res.setHeader('Access-Control-Allow-Origin', '*');
-  res.setHeader('Access-Control-Allow-Methods', 'GET, POST, PUT, DELETE, OPTIONS');
-  res.setHeader('Access-Control-Allow-Headers', 'Content-Type, Authorization, X-Requested-With');
-  res.setHeader('Access-Control-Allow-Credentials', 'true');
+  res.setHeader('Access-Control-Allow-Methods', 'GET, POST, OPTIONS');
+  res.setHeader('Access-Control-Allow-Headers', 'Content-Type, Authorization');
 
   if (req.method === 'OPTIONS') {
     return res.status(200).end();
   }
 
+  // Log everything
+  console.log('🔍 mark-verified called');
+  console.log('🔍 Method:', req.method);
+  console.log('🔍 Body:', req.body);
+
   if (req.method !== 'POST') {
-    return res.status(405).json({ error: 'Method not allowed' });
+    return res.status(405).json({ 
+      error: 'Method not allowed',
+      received: req.method 
+    });
   }
 
   try {
     const { token, email } = req.body;
 
-    console.log('Marking verified for token:', token);
-    console.log('Email:', email);
+    console.log('🎫 Received token:', token);
+    console.log('📧 Received email:', email);
 
-    // Get the bundle data from token storage
-    const bundleData = global.tokenStorage.get(token);
-    
-    if (!bundleData) {
-      console.log('Token not found or expired');
+    // Validate inputs
+    if (!token || !email) {
       return res.status(400).json({ 
         success: false, 
-        error: 'Invalid or expired token' 
+        error: 'Missing token or email',
+        received: { token: !!token, email: !!email }
       });
     }
 
-    console.log('Found bundle data for:', bundleData.customerEmail);
+    // Check if token exists in storage
+    const bundleData = global.tokenStorage.get(token);
+    
+    if (!bundleData) {
+      console.log('❌ Token not found in storage');
+      console.log('🔍 Available tokens:', Array.from(global.tokenStorage.keys()));
+      
+      return res.status(400).json({ 
+        success: false, 
+        error: 'Invalid or expired token',
+        tokenProvided: token,
+        availableTokens: Array.from(global.tokenStorage.keys()).length
+      });
+    }
 
-    // Mark as verified for this email
+    console.log('✅ Found bundle data for token');
+    console.log('👤 Bundle customer:', bundleData.customerEmail);
+    console.log('📧 Verification email:', email);
+
+    // Check if emails match
+    if (bundleData.customerEmail !== email) {
+      console.log('❌ Email mismatch');
+      return res.status(400).json({ 
+        success: false, 
+        error: 'Email does not match bundle data',
+        bundleEmail: bundleData.customerEmail,
+        verificationEmail: email
+      });
+    }
+
+    // Mark as verified
     global.verificationStorage.set(email, {
       verified: true,
       bundleData: bundleData,
+      verifiedAt: new Date().toISOString(),
       timestamp: Date.now()
     });
 
-    // Clean up the token (one-time use)
+    // Clean up token (one-time use)
     global.tokenStorage.delete(token);
 
-    console.log('Marked as verified for email:', email);
+    console.log('✅ Successfully marked as verified');
+    console.log('📊 Verification storage size:', global.verificationStorage.size);
 
     return res.status(200).json({
       success: true,
-      message: 'Verification complete'
+      message: 'Email verification successful',
+      debug: {
+        email: email,
+        verifiedAt: new Date().toISOString(),
+        verificationStorageSize: global.verificationStorage.size,
+        tokenStorageSize: global.tokenStorage.size
+      }
     });
 
   } catch (error) {
-    console.error('Error marking verified:', error);
+    console.error('❌ Error in mark-verified:', error);
+    
     return res.status(500).json({
       success: false,
-      error: 'Failed to mark as verified'
+      error: 'Server error: ' + error.message,
+      stack: process.env.NODE_ENV === 'development' ? error.stack : undefined
     });
   }
 }

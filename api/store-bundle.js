@@ -1,6 +1,7 @@
 // api/store-bundle.js
-// Simple in-memory storage for demo (in production, use a database)
-const tokenStorage = new Map();
+// Global storage that all API endpoints can access
+global.tokenStorage = global.tokenStorage || new Map();
+global.verificationStorage = global.verificationStorage || new Map();
 
 export default async function handler(req, res) {
   // Enable CORS
@@ -30,10 +31,13 @@ export default async function handler(req, res) {
     const token = Math.random().toString(36).substring(2) + Date.now().toString(36);
     
     // Store with 1 hour expiration
-    tokenStorage.set(token, {
+    global.tokenStorage.set(token, {
       ...bundleData,
       expiresAt: Date.now() + (60 * 60 * 1000) // 1 hour
     });
+
+    console.log('Stored bundle data with token:', token);
+    console.log('Customer:', bundleData.customerEmail);
 
     // Clean up expired tokens
     cleanupExpiredTokens();
@@ -54,9 +58,9 @@ export default async function handler(req, res) {
 
 function cleanupExpiredTokens() {
   const now = Date.now();
-  for (const [token, data] of tokenStorage.entries()) {
+  for (const [token, data] of global.tokenStorage.entries()) {
     if (data.expiresAt && data.expiresAt < now) {
-      tokenStorage.delete(token);
+      global.tokenStorage.delete(token);
     }
   }
 }
